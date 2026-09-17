@@ -73,13 +73,20 @@
   .chart { display: flex; align-items: stretch; gap: 10px; height: 160px; margin-top: 18px; }
   .axis { position: relative; flex: 0 0 32px; margin-bottom: 27px; }
   .axis span { position: absolute; right: 0; transform: translateY(-50%); font-size: 10.5px; color: var(--ink3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .plot { position: relative; flex: 1; min-width: 0; display: flex; align-items: stretch; gap: 5px; }
+  /* The gridlines sit in this wrapper rather than in the scroller, so they stay
+     put while the bars scroll under them - a gridline that scrolled away from
+     its own axis label would be worse than no gridline. */
+  .plotwrap { position: relative; flex: 1; min-width: 0; }
+  .plot { position: relative; height: 100%; display: flex; align-items: stretch; gap: 5px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; scroll-behavior: smooth; overscroll-behavior-x: contain; touch-action: pan-x; }
+  .plot::-webkit-scrollbar { display: none; }
   .gridlines { position: absolute; left: 0; right: 0; top: 0; bottom: 27px; pointer-events: none; }
   .gridlines i { position: absolute; left: 0; right: 0; height: 1px; background: var(--grid); }
-  .bar { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; cursor: pointer; border: 0; background: none; padding: 0; font: inherit; }
+  /* grow to fill while the span is short, hold 26px and scroll once it is not -
+     flex-shrink 0 is what turns overflow into a scroll rather than slivers */
+  .bar { position: relative; flex: 1 0 26px; display: flex; flex-direction: column; cursor: pointer; border: 0; background: none; padding: 0; font: inherit; }
   .bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   .barcol { flex: 1; display: flex; align-items: flex-end; justify-content: center; }
-  .barfill { width: 72%; max-width: 28px; min-height: 2px; border-radius: 5px 5px 2px 2px; background: var(--accent); transition: height 340ms cubic-bezier(0.2,0.8,0.2,1), opacity 200ms ease; }
+  .barfill { width: 72%; max-width: 28px; min-height: 2px; border-radius: 5px 5px 2px 2px; background: var(--accent); transition: height 340ms cubic-bezier(0.2,0.8,0.2,1), opacity 200ms ease; transition: height 420ms linear(0, 0.0506, 0.17, 0.3201, 0.4748, 0.6178, 0.7404, 0.8392, 0.9142, 0.9677, 1.0033, 1.0246, 1.0352, 1.0384, 1.0367, 1.0323, 1.0266, 1.0206, 1.0151, 1.0103, 1.0064, 1.0035, 1.0014, 1, 0.9991, 0.9987, 1), opacity 200ms ease; }
   .barlbl { height: 27px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ink3); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .barlbl .disc { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 24px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #ffffff; font-weight: 700; font-size: 12px; }
 
@@ -110,16 +117,34 @@
   .amtwrap { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
   .amt { font-family: Manrope, sans-serif; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .amtof { font-size: 11px; color: var(--ink3); font-variant-numeric: tabular-nums; }
-  .chev { flex: 0 0 auto; color: var(--ink3); transition: transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1), color 200ms ease; }
+  .chev { flex: 0 0 auto; color: var(--ink3); transition: transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1), color 200ms ease; transition: transform 420ms linear(0, 0.0693, 0.2322, 0.4328, 0.6312, 0.8028, 0.9356, 1.0269, 1.0807, 1.1039, 1.1052, 1.0924, 1.0726, 1.0508, 1.0307, 1.0141, 1.002, 0.9941, 0.9899, 0.9886, 0.9892, 0.991, 0.9933, 0.9956, 0.9976, 0.9991, 1), color 200ms ease; }
   .row[aria-expanded="true"] .chev { transform: rotate(180deg); color: var(--accent); }
 
   /* Animating to a content height nothing has measured: the wrapper is a grid
      whose single row goes 0fr -> 1fr, which interpolates, unlike height:auto. */
+  /* The linear() curves are a damped spring sampled at 27 points -
+     y(t) = 1 - e^(-zeta*w*t)(cos(wd*t) + zeta*w/wd * sin(wd*t)) - which is what
+     gives the iOS overshoot-and-settle. The height springs gently (~4% over)
+     and the content harder (~10%, with a second small oscillation), so the
+     panel lands before the lines have finished settling. Each is preceded by a
+     cubic-bezier saying roughly the same thing: an engine that cannot parse
+     linear() drops that one declaration and keeps the bezier, so the motion
+     degrades rather than snapping. Closing never overshoots the height - fr
+     units have no room below zero - so the close bounce is carried by the
+     content lifting away instead. */
   .detailwrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms cubic-bezier(0.45, 0, 0.7, 0.25); }
-  .detailwrap.open { grid-template-rows: 1fr; transition: grid-template-rows 420ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+  .detailwrap.open {
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 440ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    transition: grid-template-rows 440ms linear(0, 0.0506, 0.17, 0.3201, 0.4748, 0.6178, 0.7404, 0.8392, 0.9142, 0.9677, 1.0033, 1.0246, 1.0352, 1.0384, 1.0367, 1.0323, 1.0266, 1.0206, 1.0151, 1.0103, 1.0064, 1.0035, 1.0014, 1, 0.9991, 0.9987, 1);
+  }
   .detailclip { overflow: hidden; min-height: 0; }
   .detail { margin: 2px 10px 8px; padding: 10px 12px 10px; background: var(--muted); border-radius: 11px; display: flex; flex-direction: column; gap: 5px; opacity: 0; transform: translateY(-8px); transition: opacity 150ms ease, transform 260ms cubic-bezier(0.5, -0.2, 0.75, 0.4); }
-  .detailwrap.open .detail { opacity: 1; transform: none; transition: opacity 200ms ease 30ms, transform 480ms cubic-bezier(0.34, 1.5, 0.64, 1); }
+  .detailwrap.open .detail {
+    opacity: 1; transform: none;
+    transition: opacity 200ms ease 30ms, transform 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 200ms ease 30ms, transform 520ms linear(0, 0.0693, 0.2322, 0.4328, 0.6312, 0.8028, 0.9356, 1.0269, 1.0807, 1.1039, 1.1052, 1.0924, 1.0726, 1.0508, 1.0307, 1.0141, 1.002, 0.9941, 0.9899, 0.9886, 0.9892, 0.991, 0.9933, 0.9956, 0.9976, 0.9991, 1);
+  }
   /* Listed last so it outranks the .open rules above at equal specificity. */
   .detailwrap.instant, .detailwrap.instant .detail { transition: none; }
 
@@ -159,6 +184,7 @@
        selector away from being silently outranked again. */
     .item { animation: none !important; }
     .chev, .detailwrap, .detail, .barfill { transition: none !important; }
+    .plot { scroll-behavior: auto; }
     .detail { opacity: 1; transform: none; }
   }
 
@@ -172,6 +198,7 @@
     .cur { font-size: 19px; }
     .chart { height: 210px; margin-top: 22px; }
     .plot { gap: 8px; }
+    .bar { flex: 1 0 32px; }
     .cardhead { padding: 20px 24px 14px; }
     .cardtotal { font-size: 34px; }
     .row { padding: 11px 14px; }
@@ -260,8 +287,8 @@
   }
 
   var payload = null;
-  var state = { day: null, showBin: false, cw: 322, tick: 0 };
-  var chartWindowKey = null, builtDayKey = null, ro = null;
+  var state = { day: null, showBin: false, tick: 0 };
+  var chartDayKey = null, builtDayKey = null;
 
   var pillsEl = document.getElementById('pills');
   var allPillEl = document.getElementById('allpill');
@@ -343,92 +370,177 @@
     }
   }
 
-  // ---- Chart. Rebuilds markup only when the WINDOW of days changes; picking a
-  // different day, or dismissing a row, patches heights in place so the bars
-  // animate rather than snapping. ----
-  function computeBars() {
-    var days = dayTotals();
-    // "All" means all: the whole span is drawn, bars shrinking to fit, so the
-    // chart and the total above it always describe the same set of records.
-    // A picked day gets a readable window around it instead.
-    var comfortable = Math.max(5, Math.floor(state.cw / 34));
-    var win = days;
-    if (state.day && days.length > comfortable) {
-      var idx = 0;
-      for (var i = 0; i < days.length; i++) { if (days[i].date === state.day) idx = i; }
-      var first = Math.min(Math.max(0, idx - Math.floor(comfortable / 2)), days.length - comfortable);
-      win = days.slice(first, first + comfortable);
-    }
-    var peak = niceCeil(Math.max(1, Math.max.apply(null, win.map(function (d) { return d.outstanding; }))));
-    // Too many bars to label every one: thin the labels rather than let them
-    // collide, always keeping the first, the last and the selected day.
-    var every = Math.ceil(win.length / comfortable);
-    return {
-      peak: peak,
-      gap: win.length > 16 ? 2 : (win.length > 11 ? 3 : 5),
-      bars: win.map(function (d, i) {
-        var labelled = every <= 1 || i % every === 0 || i === win.length - 1 || d.date === state.day;
-        return {
-          date: d.date,
-          label: labelled ? String(parseDay(d.date).getUTCDate()) : '',
-          h: Math.max(0, d.outstanding / peak * 100),
-          sel: !state.day || d.date === state.day
-        };
-      })
-    };
+  // ---- Chart. Every day in the feed is a bar and the plot scrolls; the axis
+  // fits whichever bars are on screen. ----
+
+  // Scale: a pure function of the visible WINDOW, never of scroll pixels. That
+  // indirection is what the charting libraries (ECharts dataZoom, Highstock,
+  // TradingView autoScale) all share - gestures move a window, the scale is
+  // derived from the window's data. Scroll position is only how the window is
+  // worked out here.
+  //
+  // Recomputed when the scroll SETTLES, not per scroll event: a trackpad fires
+  // one every few pixels, and an axis relabelling several times in a gesture
+  // reads as broken. chartjs-plugin-zoom rescales in onPanComplete likewise.
+  var MIN_PEAK = 1000;      // floor, so a window of fully-settled days cannot
+                            // divide by zero or label the axis 0 / 0 / 0
+  var scalePeak = null;
+  var scaleRaf = null, settleTimer = null;
+
+  function reduceMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch (e) { return false; }
   }
-  function renderChart() {
-    var c = computeBars();
-    var key = c.bars.map(function (b) { return b.date; }).join(',') + '|' + c.peak + '|' + c.gap;
-    var plot = document.getElementById('chartPlot');
-    if (!plot || key !== chartWindowKey) {
-      chartWrapEl.innerHTML =
-        '<div class="axis"><span style="top:0">' + compact(c.peak) + '</span>' +
-        '<span style="top:50%">' + compact(c.peak / 2) + '</span><span style="top:100%">0</span></div>' +
-        '<div class="plot" id="chartPlot" style="gap:' + c.gap + 'px"><div class="gridlines"><i style="top:0"></i><i style="top:50%"></i><i style="bottom:0"></i></div>' +
-        c.bars.map(function (b) {
-          var dt = parseDay(b.date);
-          var title = DAYN[dt.getUTCDay()] + ' ' + dt.getUTCDate() + ' ' + MON[dt.getUTCMonth()];
-          return '<button class="bar" type="button" data-day="' + b.date + '" aria-label="' + escapeHtml(title) + '">' +
-            '<div class="barcol"><div class="barfill"></div></div>' +
-            '<div class="barlbl"></div></button>';
-        }).join('') + '</div>';
-      chartWindowKey = key;
-      attachChartObserver();
-      plot = document.getElementById('chartPlot');
-      // Paint from zero on a fresh window so the first render grows in.
-      requestAnimationFrame(function () { paintBars(c); });
-      return;
+
+  // Partially visible bars COUNT: excluding a half-scrolled-in bar that happens
+  // to be the tallest would let it render past the top of its own axis.
+  function visiblePeak(plot) {
+    var bars = plot.querySelectorAll('.bar');
+    if (!bars.length) return niceCeil(MIN_PEAK);
+    var step = bars.length > 1 ? (bars[1].offsetLeft - bars[0].offsetLeft) : bars[0].offsetWidth;
+    if (!step) return niceCeil(MIN_PEAK);
+    var first = Math.max(0, Math.floor(plot.scrollLeft / step));
+    var last = Math.min(bars.length - 1, Math.ceil((plot.scrollLeft + plot.clientWidth) / step) - 1);
+    var max = 0;
+    for (var i = first; i <= Math.max(first, last); i++) {
+      var total = parseFloat(bars[i].getAttribute('data-total')) || 0;
+      if (total > max) max = total;
     }
-    paintBars(c);
+    return niceCeil(Math.max(MIN_PEAK, max));
   }
-  function paintBars(c) {
+
+  function setAxisText(v) {
+    var spans = chartWrapEl.querySelectorAll('.axis span');
+    if (spans.length < 2) return;
+    spans[0].textContent = compact(v);
+    spans[1].textContent = compact(v / 2);
+  }
+
+  // The labels travel with the bars; numbers hard-swapping under bars still in
+  // motion reads as a glitch rather than a rescale.
+  function tweenAxis(from, to, instant) {
+    if (scaleRaf) cancelAnimationFrame(scaleRaf);
+    if (instant || from === null || reduceMotion()) { setAxisText(to); return; }
+    var start = null, dur = 280;
+    function step(ts) {
+      if (start === null) start = ts;
+      var pr = Math.min(1, (ts - start) / dur);
+      var e = 1 - Math.pow(1 - pr, 3);
+      setAxisText(from + (to - from) * e);
+      if (pr < 1) scaleRaf = requestAnimationFrame(step);
+    }
+    scaleRaf = requestAnimationFrame(step);
+  }
+
+  function applyScale(peak, instant) {
     var plot = document.getElementById('chartPlot');
     if (!plot) return;
-    plot.style.gap = c.gap + 'px';
-    c.bars.forEach(function (b) {
+    Array.prototype.forEach.call(plot.querySelectorAll('.bar'), function (el) {
+      var total = parseFloat(el.getAttribute('data-total')) || 0;
+      el.querySelector('.barfill').style.height = Math.min(100, total / peak * 100) + '%';
+    });
+    tweenAxis(scalePeak, peak, instant);
+    scalePeak = peak;
+  }
+
+  // force: a refresh can move the amounts without moving the peak, and those
+  // bars still have to be repainted.
+  function settleScale(instant, force) {
+    clearTimeout(settleTimer);
+    var plot = document.getElementById('chartPlot');
+    if (!plot) return;
+    var peak = visiblePeak(plot);
+    if (force || peak !== scalePeak) applyScale(peak, instant);
+  }
+
+  function scheduleSettle() {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(function () { settleScale(false); }, 120);
+  }
+
+  function scrollBarIntoView() {
+    var plot = document.getElementById('chartPlot');
+    if (!plot || !state.day) return;
+    var bar = plot.querySelector('.bar[data-day="' + state.day + '"]');
+    if (!bar) return;
+    var target = bar.offsetLeft - plot.clientWidth / 2 + bar.offsetWidth / 2;
+    target = Math.max(0, Math.min(target, plot.scrollWidth - plot.clientWidth));
+    try { plot.scrollTo({ left: target, behavior: 'smooth' }); }
+    catch (e) { plot.scrollLeft = target; }
+  }
+
+  function computeBars() {
+    return dayTotals().map(function (d) {
+      return {
+        date: d.date,
+        label: String(parseDay(d.date).getUTCDate()),
+        total: d.outstanding,
+        sel: !state.day || d.date === state.day
+      };
+    });
+  }
+
+  // Markup is rebuilt only when the SET OF DAYS changes - not on every refresh,
+  // which used to replay the grow-in animation and throw away the scroll
+  // position once a minute. A changed amount patches in place instead.
+  function renderChart() {
+    var bars = computeBars();
+    var dayKey = bars.map(function (b) { return b.date; }).join(',');
+    var plot = document.getElementById('chartPlot');
+
+    if (!plot || dayKey !== chartDayKey) {
+      chartWrapEl.innerHTML =
+        '<div class="axis"><span style="top:0"></span>' +
+        '<span style="top:50%"></span><span style="top:100%">0</span></div>' +
+        '<div class="plotwrap">' +
+          '<div class="gridlines"><i style="top:0"></i><i style="top:50%"></i><i style="bottom:0"></i></div>' +
+          '<div class="plot" id="chartPlot">' +
+          bars.map(function (b) {
+            var dt = parseDay(b.date);
+            var title = DAYN[dt.getUTCDay()] + ' ' + dt.getUTCDate() + ' ' + MON[dt.getUTCMonth()];
+            return '<button class="bar" type="button" data-day="' + b.date + '" data-total="' + b.total + '" aria-label="' + escapeHtml(title) + '">' +
+              '<div class="barcol"><div class="barfill"></div></div>' +
+              '<div class="barlbl"></div></button>';
+          }).join('') +
+          '</div>' +
+        '</div>';
+      chartDayKey = dayKey;
+      plot = document.getElementById('chartPlot');
+      plot.scrollLeft = plot.scrollWidth;   // open on today, at the right-hand end
+
+      // scrollend where supported; the debounce is both the fallback and the
+      // safety net for scrolls that never fire it (a programmatic scrollTo).
+      plot.addEventListener('scroll', scheduleSettle, { passive: true });
+      if ('onscrollend' in window) {
+        plot.addEventListener('scrollend', function () { settleScale(false); });
+      }
+      window.addEventListener('resize', scheduleSettle);
+
+      // Heights start unset, so this first pass grows them in from zero.
+      requestAnimationFrame(function () { settleScale(true, true); paintBars(bars); });
+      return;
+    }
+
+    bars.forEach(function (b) {
+      var el = plot.querySelector('.bar[data-day="' + b.date + '"]');
+      if (el) el.setAttribute('data-total', b.total);
+    });
+    settleScale(false, true);
+    paintBars(bars);
+    scrollBarIntoView();
+  }
+
+  // Heights belong to the scale now; this owns only selection and labels.
+  function paintBars(bars) {
+    var plot = document.getElementById('chartPlot');
+    if (!plot) return;
+    bars.forEach(function (b) {
       var el = plot.querySelector('.bar[data-day="' + b.date + '"]');
       if (!el) return;
-      var fill = el.querySelector('.barfill');
-      fill.style.height = b.h + '%';
-      fill.style.opacity = b.sel ? 1 : 0.3;
+      el.querySelector('.barfill').style.opacity = b.sel ? 1 : 0.3;
       el.querySelector('.barlbl').innerHTML = (state.day && b.date === state.day)
         ? '<span class="disc">' + b.label + '</span>' : b.label;
     });
-  }
-  function attachChartObserver() {
-    if (ro) { try { ro.disconnect(); } catch (e) {} ro = null; }
-    var plot = document.getElementById('chartPlot');
-    if (!plot || typeof ResizeObserver === 'undefined') return;
-    ro = new ResizeObserver(function (entries) {
-      var r = entries[0] && entries[0].contentRect;
-      if (r && r.width > 0 && Math.abs(r.width - state.cw) > 1) {
-        state.cw = r.width;
-        chartWindowKey = null;
-        renderChart();
-      }
-    });
-    ro.observe(plot);
   }
 
   // ---- Rows ----
@@ -678,9 +790,9 @@
         if (dayKey !== builtDayKey) {
           if (state.day && dayKey.indexOf(state.day) === -1) state.day = null; // it fell out of the feed
           builtDayKey = dayKey;
+          chartDayKey = null;   // the day set moved - the bars must be rebuilt
           buildPills();
         }
-        chartWindowKey = null;
         render(first);
       })
       .catch(function (err) {
