@@ -314,10 +314,11 @@
       syncFade();
     });
   }
-  function todayKey() {
-    var days = payload.days || [];
+  function lastDayKey(data) {
+    var days = (data && data.days) || [];
     return days.length ? days[days.length - 1].date : null;
   }
+  function todayKey() { return lastDayKey(payload); }
   function syncFade() { fadeEl.style.opacity = pillsEl.scrollLeft > 2 ? '1' : '0'; }
   function updatePills() {
     var totals = {};
@@ -667,7 +668,12 @@
               g.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Indian/Maldives' });
           }
         }
-        if (first) dismissed = loadDismissed();
+        if (first) {
+          dismissed = loadDismissed();
+          // Opens on today. "All" is one tap away on the pinned pill, and
+          // clicking the selected bar again also returns to it.
+          state.day = lastDayKey(data);
+        }
         var dayKey = (data.days || []).map(function (d) { return d.date; }).join(',');
         if (dayKey !== builtDayKey) {
           if (state.day && dayKey.indexOf(state.day) === -1) state.day = null; // it fell out of the feed

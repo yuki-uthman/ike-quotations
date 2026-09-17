@@ -50,9 +50,10 @@ orders, section and note lines), lives in `ike-data/scripts/fetch_quotations.py`
 - **The bar chart** is outstanding value by the date the quotation was raised,
   so a tall old bar is money that has been sitting a long time. Bars shrink as
   customers pay.
-- **`All`** is pinned to the left of the day strip and is where the page
-  opens — the whole pipeline, every day at once. The day pills scroll
-  underneath it, oldest left, today right.
+- **The page opens on today**, so the first thing you see is what came in
+  today rather than three weeks of backlog. The day pills run oldest left,
+  today right, and scroll underneath the pinned **`All`** pill on the left —
+  one tap for the whole pipeline, every day at once.
 - **Clicking a bar or a pill** narrows everything — total, both cards — to that
   one day. Clicking the selected bar again returns to `All`.
 - **Each row** carries its reference, customer, the date and how long ago it
