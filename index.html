@@ -58,6 +58,23 @@
   .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .daterow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 2px 2px 0; }
+  .daterowend { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+
+  /* One control for the page, not one per card: it is a way of reading both
+     cards, and the same money either way. */
+  .seg { display: inline-flex; padding: 2px; background: var(--muted); border-radius: 999px; gap: 2px; flex: 0 0 auto; }
+  .seg button { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px; background: none; color: var(--ink3); transition: background 180ms ease, color 180ms ease; }
+  .seg button[aria-selected="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(13,31,28,0.12); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* product rows */
+  .prow { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 11px; }
+  .prow + .prow { box-shadow: inset 0 1px 0 var(--rule); }
+  .rank { flex: 0 0 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--muted); color: var(--ink2); }
+  .pname { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .pn { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pq { font-size: 12px; color: var(--ink3); }
+  .pt { font-family: Manrope, sans-serif; font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .dayname { font-family: Manrope, sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.01em; line-height: 1.15; }
   .daydate { font-size: 13px; color: var(--ink2); margin-top: 2px; }
   .stamp { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink3); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -222,7 +239,13 @@
         <div class="dayname" id="dayname">&nbsp;</div>
         <div class="daydate" id="daydate">&nbsp;</div>
       </div>
-      <div class="stamp" id="stamp"></div>
+      <div class="daterowend">
+        <div class="stamp" id="stamp"></div>
+        <span class="seg" id="viewSeg" role="tablist" aria-label="How to list what is open">
+          <button type="button" role="tab" data-view="records" aria-controls="content">Records</button>
+          <button type="button" role="tab" data-view="products" aria-controls="content">Products</button>
+        </span>
+      </div>
     </div>
 
     <div class="card hero" id="hero">
@@ -287,7 +310,14 @@
   }
 
   var payload = null;
-  var state = { day: null, showBin: false, tick: 0 };
+  var VIEW_KEY = 'ike-quotations-view';
+  function loadView() {
+    try { return localStorage.getItem(VIEW_KEY) === 'products' ? 'products' : 'records'; }
+    catch (e) { return 'records'; }   // private window, blocked storage
+  }
+  function saveView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch (e) {} }
+
+  var state = { day: null, showBin: false, tick: 0, view: loadView() };
   var chartDayKey = null, builtDayKey = null;
 
   var pillsEl = document.getElementById('pills');
@@ -298,6 +328,7 @@
   var stampEl = document.getElementById('stamp');
   var heroValueEl = document.getElementById('heroValue');
   var sublineEl = document.getElementById('subline');
+  var viewSegEl = document.getElementById('viewSeg');
   var chartWrapEl = document.getElementById('chartWrap');
   var contentEl = document.getElementById('content');
   var binEl = document.getElementById('bin');
@@ -611,16 +642,61 @@
     return '<div class="item"' + style + '>' + head + detail + '</div>';
   }
 
+  // What is sitting inside these records, aggregated by product. Note this
+  // totals the LINES, which for a part-paid record is more than the amount
+  // still owing above it - the card total is money outstanding, a product line
+  // is the whole thing that was ordered. Rare here, and the "Part paid" tag in
+  // the records view is where that shows.
+  function productsIn(rows) {
+    var agg = {};
+    rows.forEach(function (q) {
+      (q.lines || []).forEach(function (l) {
+        var name = stripCode(l.name);
+        var a = agg[name] || (agg[name] = { name: name, qty: 0, total: 0 });
+        a.qty += l.qty; a.total += l.total;
+      });
+    });
+    return Object.keys(agg).map(function (n) { return agg[n]; })
+      .sort(function (a, b) { return b.total - a.total || a.name.localeCompare(b.name); });
+  }
+
+  function productRowHtml(p, i, animClass, swatch) {
+    var delay = Math.min(i, 12) * 30 + 'ms';
+    var anim = animClass
+      ? ' style="animation: ' + animClass + ' 300ms cubic-bezier(0.2,0.8,0.2,1) both;animation-delay:' + delay + '"'
+      : '';
+    var badge = i === 0
+      ? ' style="background:' + swatch + ';color:#ffffff"'
+      : '';
+    return '<div class="prow"' + anim + '>' +
+      '<span class="rank"' + badge + '>' + (i + 1) + '</span>' +
+      '<span class="pname"><span class="pn">' + escapeHtml(p.name) + '</span>' +
+      '<span class="pq">' + fmt(p.qty) + (p.qty === 1 ? ' unit' : ' units') + '</span></span>' +
+      '<span class="pt">' + fmt(p.total) + '</span>' +
+      '</div>';
+  }
+
   function cardHtml(title, swatch, rows, animClass) {
-    var n = rows.length;
-    var body = n
-      ? rows.map(function (q, i) { return rowHtml(q, i, animClass); }).join('')
-      : '<div class="empty">Nothing open here' + (state.day ? ' on this day' : '') + '.</div>';
+    var products = state.view === 'products' ? productsIn(rows) : null;
+    var n = products ? products.length : rows.length;
+    var noun = products
+      ? (n === 1 ? ' product' : ' products')
+      : (n === 1 ? ' record' : ' records');
+    var body;
+    if (!rows.length) {
+      body = '<div class="empty">Nothing open here' + (state.day ? ' on this day' : '') + '.</div>';
+    } else if (products) {
+      body = products.length
+        ? products.map(function (p, i) { return productRowHtml(p, i, animClass, swatch); }).join('')
+        : '<div class="empty">No product lines on these records.</div>';
+    } else {
+      body = rows.map(function (q, i) { return rowHtml(q, i, animClass); }).join('');
+    }
     return '<div class="card">' +
       '<div class="cardhead">' +
         '<div class="headrow">' +
           '<span class="kind"><span class="swatch" style="background:' + swatch + '"></span>' + title + '</span>' +
-          '<span class="count">' + n + (n === 1 ? ' record' : ' records') + '</span>' +
+          '<span class="count">' + n + noun + '</span>' +
         '</div>' +
         '<div class="cardtotal"><span class="cur">MVR</span><span>' + fmt(sum(rows)) + '</span></div>' +
       '</div>' +
@@ -679,6 +755,7 @@
 
     renderChart();
     updatePills();
+    updateViewTabs();
 
     var open = openRowKeys();
     var animClass = animate ? ((++state.tick) % 2 ? 'rise-b' : 'rise-a') : null;
@@ -725,6 +802,34 @@
     state.day = day;
     render(true);
   }
+  function updateViewTabs() {
+    Array.prototype.forEach.call(viewSegEl.querySelectorAll('button'), function (btn) {
+      var on = btn.getAttribute('data-view') === state.view;
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      btn.setAttribute('tabindex', on ? '0' : '-1');
+    });
+  }
+
+  function setView(view) {
+    if (view !== 'records' && view !== 'products') return;
+    if (view === state.view) return;
+    state.view = view;
+    saveView(view);
+    render(true);
+  }
+
+  viewSegEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (btn) setView(btn.getAttribute('data-view'));
+  });
+  viewSegEl.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    setView(state.view === 'records' ? 'products' : 'records');
+    var sel = viewSegEl.querySelector('button[aria-selected="true"]');
+    if (sel) sel.focus();
+  });
+
   allPillEl.addEventListener('click', function () { selectDay(null); });
   pillsEl.addEventListener('click', function (e) {
     var btn = e.target.closest('.pill');
