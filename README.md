@@ -10,7 +10,8 @@ Like its siblings this repo is **static only**: no secret, no cron, no build
 step. It fetches its data live from
 [ike-data](https://github.com/yuki-uthman/ike-data), the shared Odoo pipeline
 that also backs [ike-sales](https://github.com/yuki-uthman/ike-sales),
-[ike-today](https://github.com/yuki-uthman/ike-today) and ike-expenses.
+[ike-pos](https://github.com/yuki-uthman/ike-pos) (formerly ike-today) and
+ike-expenses.
 
 ## What counts as still open
 
@@ -107,5 +108,5 @@ right now, and its day span shrinks as old quotations settle.
 GitHub Pages on a free plan requires a **public** repository, so this page is
 technically reachable by anyone with the exact URL, though it isn't linked or
 indexed anywhere. Note this dashboard shows **customer names, order references
-and amounts owing**, the same exposure as ike-today. If that matters, GitHub
+and amounts owing**, the same exposure as ike-pos. If that matters, GitHub
 Pages on private repos requires GitHub Pro or higher.
